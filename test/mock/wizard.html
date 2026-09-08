@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Mock — Seller Portal Sifter job wizard</title>
+<style>
+  body { font-family: Inter, Arial, sans-serif; margin: 0; color: #121212; }
+  header.shell { background: #0b1f3a; color: #fff; padding: 12px 24px; font-weight: 700; }
+  .sellerportal-sifter-job { display: flex; flex-direction: column; max-width: 90rem; margin: 0 auto; min-height: calc(100vh - 100px); }
+  .padding-md { padding: 1.5rem; }
+  .sellerportal-sifter-job__content { flex: 1 1 auto; }
+  .sellerportal-sifter-job__footer { display: flex; flex-direction: column; gap: .75rem; margin-top: 1rem; }
+  .sellerportal-sifter-job__footer-bottom { display: flex; justify-content: space-between; }
+  .sellerportal-sifter-job__footer-actions { display: flex; gap: 1rem; }
+  .sellerportal-sifter-job__validation-message { margin: 0; color: #e71826; text-align: right; }
+  .sellerportal-sifter-job__validation-message--hidden { display: none; }
+  .tcg-standard-button { border: 1px solid #333; background: #fff; padding: 10px 18px; border-radius: 6px; font-weight: 600; cursor: pointer; }
+  .tcg-standard-button.priority { background: #1652f0; color: #fff; border-color: #1652f0; }
+  .job-config__content { display: flex; gap: 2rem; }
+  .job-config__content-left { flex: 1; }
+  .job-config__content-right { width: 280px; border: 1px solid #d4d7e2; border-radius: 8px; padding: 1rem; height: fit-content; }
+  .job-config__criteria-grid { display: flex; gap: .75rem; }
+  .job-config__criteria-card { border: 1px solid #d4d7e2; background: #fff; border-radius: 8px; padding: 12px 16px; cursor: pointer; }
+  .job-config__criteria-card--selected { border-color: #1652f0; background: #eaf0ff; }
+  .job-config__criteria-detail { display: flex; align-items: flex-start; gap: .5rem; margin-top: .75rem; }
+  .job-config__criteria-field { width: 320px; }
+  .currency-input__input, .tcg-input-select__trigger { border: 1px solid #999; border-radius: 6px; padding: 8px 10px; width: 100%; box-sizing: border-box; background: #fff; }
+  .tcg-input-select { position: relative; }
+  .tcg-input-select__trigger-container { display: flex; }
+  .tcg-base-dropdown { display: none; position: absolute; left: 0; right: 0; list-style: none; margin: 0; padding: 4px 0; background: #fff; border: 1px solid #ccc; z-index: 5; }
+  .tcg-input-select.is-open .tcg-base-dropdown { display: block; }
+  .tcg-base-dropdown__item { padding: 6px 10px; cursor: pointer; }
+  .tcg-base-dropdown__item.is-selected { background: #eaf0ff; font-weight: 600; }
+  .tcg-input-field__label { display: block; font-size: 12px; font-weight: 600; margin: 8px 0 4px; }
+  .tcg-skeleton { height: 42px; width: 287px; background: #eee; border-radius: 6px; }
+  .job-summary__row { display: flex; gap: 6px; align-items: center; }
+  .job-summary__divider { border: 0; border-top: 1px solid #d4d7e2; margin: 12px 0; }
+  .select-game-and-job-type__cards { display: flex; gap: 12px; }
+  .select-game-and-job-type__card { border: 1px solid #d4d7e2; border-radius: 8px; padding: 12px; background: #fff; cursor: pointer; width: 200px; text-align: left; }
+  .select-game-and-job-type__card.is-selected { border-color: #1652f0; background: #eaf0ff; }
+  .job-config__field-error { color: #e71826; font-size: 12px; }
+  .margin-0 { margin: 0; }
+  .mock-tools { position: fixed; left: 8px; bottom: 8px; font-size: 11px; color: #666; }
+</style>
+</head>
+<body>
+<header class="shell">Seller Portal (mock) — Scan &amp; Identify</header>
+<div id="app"></div>
+<div class="mock-tools">mock wizard · <button id="mock-reset" type="button">reset form</button></div>
+<script>
+(function () {
+  const GAMES = [
+    { code: 'MTG', name: 'Magic: The Gathering' },
+    { code: 'PKM', name: 'Pokémon' },
+    { code: 'YGO', name: 'Yu-Gi-Oh!' },
+    { code: 'ONE', name: 'One Piece' },
+    { code: 'LOR', name: 'Lorcana' },
+  ];
+  const JOB_TYPES = [
+    { code: 'scan-only', name: 'Scan only' },
+    { code: 'scan-and-sift', name: 'Scan & sift' },
+    { code: 'sift-only', name: 'Sift only' },
+  ];
+  const RARITY = {
+    MTG: ['Common', 'Uncommon', 'Rare', 'Mythic', 'Land', 'Token'],
+    PKM: ['Common', 'Uncommon', 'Rare', 'Ultra Rare', 'Secret Rare'],
+    YGO: [], ONE: [], LOR: [],
+  };
+  const COLOR = {
+    MTG: ['Black', 'Blue', 'Colorless', 'Green', 'Red', 'White'],
+    PKM: ['Colorless', 'Darkness', 'Dragon', 'Fairy', 'Fighting', 'Fire', 'Grass', 'Lightning', 'Metal', 'Psychic', 'Water'],
+    YGO: [], ONE: [], LOR: ['Amber', 'Amethyst', 'Emerald', 'Ruby', 'Sapphire', 'Steel'],
+  };
+  const FOIL_FINISH = {
+    MTG: ['Foil', 'Special Foil'], PKM: ['Holofoil', 'Reverse Holo'], YGO: ['Partial or No Foiling', 'Full Foiling'],
+    ONE: ['Foil', 'Jolly Roger Foil', 'Textured Foil'], LOR: ['Cold Foil', 'Holofoil'],
+  };
+  const CONDITIONS = ['Near Mint', 'Lightly Played', 'Moderately Played', 'Heavily Played', 'Damaged'];
+  const COLOR_CARD = { PKM: 'Energy', LOR: 'Ink type' };
+  const COLOR_SELECT = { PKM: 'Energy type', LOR: 'Ink type' };
+  const HIDDEN = { YGO: ['color', 'foil', 'rarity'], ONE: ['color'] };
+  const PRICE_CONDS = { MTG: ['Near Mint', 'Lightly Played', 'Moderately Played'], PKM: ['Near Mint', 'Lightly Played', 'Moderately Played'] };
+
+  const params = new URLSearchParams(location.search);
+  const state = window.__mockState = {
+    step: Number(params.get('step') || 1),
+    game: GAMES.find((g) => g.code === params.get('game')) || null,
+    jobType: params.get('job') || null,
+    jobConfig: blankConfig(),
+    validation: '',
+    started: null,
+  };
+  function blankConfig() {
+    return { selectedCriteria: [], matchMode: null, selectedCondition: null, selectedLanguage: 'English', priceThreshold: null,
+      selectedRarity: [], selectedColor: [], foilPreference: null, foilFinish: null, selectedBins: [1, 2, 3], batchNameMode: 'default' };
+  }
+  window.__mock = {
+    state,
+    reset() { state.jobConfig = blankConfig(); state.validation = ''; render(); },
+    goto(step) { state.step = step; render(); },
+  };
+
+  const app = document.getElementById('app');
+  const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); const el = t.content.firstElementChild; el.remove(); return el; };
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  let uid = 0;
+  /** Faithful copy of TcgInputSelect + TcgBaseDropdown markup. Patches in place on sync(). */
+  function makeSelect({ cls, label, items, multiple, disabled, getValue, setValue }) {
+    const id = 'tcg-select-' + (++uid);
+    const root = h(`
+      <div class="tcg-input ${cls}">
+        <div class="tcg-input-field">
+          <label id="${id}-label" for="${id}" class="tcg-input-field__label"><span>${esc(label)}</span></label>
+          <div class="tcg-input-field__content">
+            <div class="tcg-input-select ${disabled ? 'is-disabled' : ''}">
+              <div class="tcg-input-select__trigger-container">
+                <div id="${id}" role="combobox" class="tcg-input-select__trigger" aria-haspopup="listbox" aria-expanded="false" tabindex="${disabled ? -1 : 0}"><span>Select</span></div>
+                <div><button class="tcg-input-select__trigger-toggle-button" type="button" aria-label="Toggle listbox" tabindex="-1">▾</button></div>
+              </div>
+              <ul class="tcg-base-dropdown" role="listbox" id="${id}-dropdown"></ul>
+            </div>
+          </div>
+        </div>
+      </div>`);
+    const select = root.querySelector('.tcg-input-select');
+    const ul = root.querySelector('ul');
+    const trigger = root.querySelector('.tcg-input-select__trigger');
+    items.forEach((text, i) => {
+      const li = h(`<li class="tcg-base-dropdown__item" role="option" aria-label="${esc(text)}" id="${id}-dropdown-item-${i}">${multiple ? '<span class="tcg-base-dropdown__checkbox"></span>' : ''}<span class="tcg-base-dropdown__item-content"><span>${esc(text)}</span></span></li>`);
+      li.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (disabled) return;
+        if (multiple) {
+          const cur = getValue() || [];
+          setValue(cur.includes(text) ? cur.filter((x) => x !== text) : cur.concat(text));
+        } else {
+          setValue(text);
+          select.classList.remove('is-open');
+        }
+        render();
+      });
+      ul.appendChild(li);
+    });
+    root.querySelector('.tcg-input-select__trigger-container').addEventListener('click', () => {
+      if (disabled) return;
+      select.classList.toggle('is-open');
+      trigger.setAttribute('aria-expanded', select.classList.contains('is-open'));
+    });
+    document.addEventListener('click', (e) => { if (!root.contains(e.target)) select.classList.remove('is-open'); });
+    root.__sync = () => {
+      const v = getValue();
+      const sel = multiple ? (v || []) : (v ? [v] : []);
+      ul.querySelectorAll('li').forEach((li) => li.classList.toggle('is-selected', sel.includes(li.getAttribute('aria-label'))));
+      trigger.querySelector('span').textContent = sel.length ? sel.join(', ') : 'Select';
+    };
+    root.__sync();
+    return root;
+  }
+
+  function makeRadio(name, label, value, getValue, setValue) {
+    const id = 'radio-' + (++uid);
+    const root = h(`<span class="tcg-input-radio"><label for="${id}" class="tcg-input-radio__label"><span><input id="${id}" name="${name}" value="${esc(value)}" class="tcg-input-radio__input" type="radio" /></span><span>${esc(label)}</span></label></span>`);
+    const input = root.querySelector('input');
+    input.addEventListener('change', () => { if (input.checked) { setValue(value); render(); } });
+    root.__sync = () => { input.checked = getValue() === value; root.classList.toggle('is-selected', input.checked); };
+    root.__sync();
+    return root;
+  }
+
+  function makeCheckbox(label, getChecked, setChecked) {
+    const id = 'chk-' + (++uid);
+    const root = h(`<div class="tcg-input-checkbox"><label for="${id}" class="tcg-input-checkbox__label"><span><input id="${id}" type="checkbox" class="tcg-input-checkbox__input" /><span class="tcg-input-checkbox__input-toggle"></span></span><span>${esc(label)}</span></label></div>`);
+    const input = root.querySelector('input');
+    input.addEventListener('change', () => { setChecked(input.checked); render(); });
+    root.__sync = () => { input.checked = getChecked(); };
+    root.__sync();
+    return root;
+  }
+
+  /* ---------- step 1 ---------- */
+  let step1 = null;
+  function buildStep1() {
+    const root = h(`
+      <div class="select-game-and-job-type">
+        <header class="select-game-and-job-type__header"><h1 class="typography-heading-lg select-game-and-job-type__title">Choose game and job type</h1></header>
+        <div class="select-game-and-job-type__sections">
+          <section class="select-game-and-job-type__section"><h2 id="select-a-game-label">Select a game <span class="select-game-and-job-type__required">*</span></h2><div class="game-select-slot"></div></section>
+          <section class="select-game-and-job-type__section"><h2 id="select-a-job-type-label">Select a job type</h2>
+            <div role="group" class="select-game-and-job-type__cards"></div></section>
+        </div>
+      </div>`);
+    root.querySelector('.game-select-slot').appendChild(makeSelect({
+      cls: 'select-game-and-job-type__game-select', label: 'Game', items: GAMES.map((g) => g.name), multiple: false,
+      getValue: () => (state.game ? state.game.name : null),
+      setValue: (name) => { state.game = GAMES.find((g) => g.name === name); state.jobConfig = blankConfig(); },
+    }));
+    const cards = root.querySelector('.select-game-and-job-type__cards');
+    JOB_TYPES.forEach((jt) => {
+      const b = h(`<button type="button" class="select-game-and-job-type__card" aria-pressed="false" aria-label="${esc(jt.name)}"><span class="select-game-and-job-type__card-body"><span class="select-game-and-job-type__card-name">${esc(jt.name)}</span></span></button>`);
+      b.addEventListener('click', () => { state.jobType = jt.code; render(); });
+      b.__sync = () => { const on = state.jobType === jt.code; b.setAttribute('aria-pressed', on); b.classList.toggle('is-selected', on); };
+      cards.appendChild(b);
+    });
+    root.__sync = () => root.querySelectorAll('*').forEach((n) => n.__sync && n !== root && n.__sync());
+    return root;
+  }
+
+  /* ---------- step 2 (JobConfig) ---------- */
+  let step2 = null;
+  function buildStep2() {
+    const g = state.game ? state.game.code : 'MTG';
+    const jt = state.jobType || 'sift-only';
+    const isSiftOnly = jt === 'sift-only';
+    const isScanOnly = jt === 'scan-only';
+    const title = isScanOnly ? 'Scan job setup' : isSiftOnly ? 'Sift job setup' : 'Scan and sift job setup';
+    const root = h(`
+      <div class="job-config">
+        <header class="job-config__header"><h2 class="job-config__title typography-heading-lg margin-0">${title}</h2><p class="job-config__subtitle">Complete the selections below. Then, select "Start job" to begin.</p></header>
+        <div class="job-config__content">
+          <div class="job-config__content-left">
+            <section class="job-config__section">
+              <div class="job-config__sift-type-settings">
+                ${isScanOnly ? '' : `
+                <div class="job-config__sift-type-settings-preferences">
+                  <div><h3 class="typography-heading-md margin-0">Select your sifting preferences</h3><p class="typography-body margin-0">These selections will determine which cards go into bin 1.</p></div>
+                  <p class="typography-detail font-weight-600 margin-0">Select one or more criteria to sift by:</p>
+                  <div class="job-config__criteria-grid"></div>
+                  <p class="job-config__price-sift-note" data-testid="job-config-price-sift-note">For this game, price sift supports ${(PRICE_CONDS[g] || ['Near Mint']).join(', ')} cards only.</p>
+                  <div class="job-config__criteria-details"></div>
+                </div>
+                <div class="job-config__match-mode" hidden><h3 class="typography-heading-sm margin-0">Match mode</h3><div class="match-slot"></div></div>`}
+              </div>
+              <hr />
+              <div class="job-config__identification"><h3>Identification</h3><div class="cond-slot"><div class="tcg-skeleton"></div></div><div class="lang-slot"></div></div>
+              <div class="job-config__foil-finish"><h3>Foil type</h3><div class="ff-slot"></div></div>
+              ${isSiftOnly ? '' : `<hr /><div class="job-config__bins"><h3>Bins</h3><div class="bins-slot"></div></div>
+              <hr /><div class="job-config__batch"><h3>Batch name</h3><div class="batch-slot"></div></div>`}
+            </section>
+          </div>
+          <aside class="job-config__content-right">
+            <div class="job-summary">
+              <h2 class="typography-heading-md margin-0">Job Summary</h2>
+              ${isScanOnly ? '' : `<section class="job-summary__section"><h3 class="typography-heading-sm margin-0">Sift preferences</h3><div class="job-summary__rows sift-rows"></div></section><hr class="job-summary__divider" />`}
+              <section class="job-summary__section"><h3 class="typography-heading-sm margin-0">Identification</h3><div class="job-summary__rows ident-rows"></div></section>
+            </div>
+          </aside>
+        </div>
+      </div>`);
+
+    const cfg = () => state.jobConfig;
+    const hidden = HIDDEN[g] || [];
+    const criteria = [
+      { id: 'price', label: 'Price' }, { id: 'rarity', label: 'Rarity' }, { id: 'color', label: COLOR_CARD[g] || 'Color' }, { id: 'foil', label: 'Foil' },
+    ].filter((c) => !hidden.includes(c.id));
+
+    if (!isScanOnly) {
+      const grid = root.querySelector('.job-config__criteria-grid');
+      criteria.forEach((c) => {
+        const b = h(`<button type="button" class="job-config__criteria-card" aria-pressed="false"><p class="typography-body">${esc(c.label)}</p></button>`);
+        b.addEventListener('click', () => {
+          const s = new Set(cfg().selectedCriteria);
+          if (s.has(c.id)) {
+            s.delete(c.id);
+            if (c.id === 'price') cfg().priceThreshold = null;
+            if (c.id === 'rarity') cfg().selectedRarity = [];
+            if (c.id === 'color') cfg().selectedColor = [];
+            if (c.id === 'foil') cfg().foilPreference = null;
+          } else s.add(c.id);
+          cfg().selectedCriteria = ['price', 'rarity', 'color', 'foil'].filter((x) => s.has(x));
+          render();
+        });
+        b.__sync = () => { const on = cfg().selectedCriteria.includes(c.id); b.setAttribute('aria-pressed', on); b.classList.toggle('job-config__criteria-card--selected', on); };
+        grid.appendChild(b);
+      });
+
+      const details = root.querySelector('.job-config__criteria-details');
+      const blocks = {};
+      const makeBlock = (id) => {
+        if (id === 'price') {
+          const el = h(`<div class="job-config__criteria-detail" data-crit="price"><div class="job-config__criteria-field">
+              <p class="job-config__criteria-heading" data-testid="job-config-price-heading">Price threshold (greater than/ equal to)</p>
+              <div class="currency-input job-config__criteria-input"><label class="currency-input__label currency-input__label--hidden"><span>Price</span></label>
+                <div class="currency-input__fake-container"><div class="currency-input__container"><div class="currency-input__left-icon">$</div>
+                <input class="currency-input__input" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00" value="" /></div>
+                <div class="currency-input__modifier-btns"><button type="button" class="currency-input__increment-btn">+</button><button type="button" class="currency-input__decrement-btn">−</button></div></div></div>
+            </div><button type="button" class="job-config__criteria-remove" aria-label="Remove price criteria">×</button></div>`);
+          const input = el.querySelector('input');
+          let focused = false;
+          const sanitize = (s) => { let t = s.replace(/[^0-9.]/g, ''); const i = t.indexOf('.'); if (i !== -1) t = t.slice(0, i) + '.' + t.slice(i + 1).replaceAll('.', '').slice(0, 2); return t; };
+          input.addEventListener('focus', () => { focused = true; });
+          input.addEventListener('input', () => { const v = sanitize(input.value); input.value = v; const n = v === '' || v === '.' ? null : Number(v); cfg().priceThreshold = n == null || Number.isNaN(n) ? null : Math.round(n * 100) / 100; render(); });
+          input.addEventListener('blur', () => { focused = false; const n = cfg().priceThreshold; input.value = n == null ? '' : n.toFixed(2); render(); });
+          el.querySelector('.job-config__criteria-remove').addEventListener('click', () => { cfg().selectedCriteria = cfg().selectedCriteria.filter((x) => x !== 'price'); cfg().priceThreshold = null; render(); });
+          el.querySelector('.currency-input__increment-btn').addEventListener('click', () => { cfg().priceThreshold = Math.round(((cfg().priceThreshold || 0) + 0.01) * 100) / 100; render(); });
+          el.__sync = () => { if (!focused) input.value = cfg().priceThreshold == null ? '' : cfg().priceThreshold.toFixed(2); };
+          return el;
+        }
+        if (id === 'rarity' || id === 'color') {
+          const el = h(`<div class="job-config__criteria-detail" data-crit="${id}"><div class="job-config__criteria-field"></div><button type="button" class="job-config__criteria-remove" aria-label="Remove ${id} criteria">×</button></div>`);
+          el.querySelector('.job-config__criteria-field').appendChild(makeSelect({
+            cls: 'job-config__criteria-input', label: id === 'rarity' ? 'Rarity' : (COLOR_SELECT[g] || 'Color'), items: (id === 'rarity' ? RARITY : COLOR)[g], multiple: true,
+            getValue: () => (id === 'rarity' ? cfg().selectedRarity : cfg().selectedColor),
+            setValue: (v) => { if (id === 'rarity') cfg().selectedRarity = v; else cfg().selectedColor = v; },
+          }));
+          el.querySelector('.job-config__criteria-remove').addEventListener('click', () => { cfg().selectedCriteria = cfg().selectedCriteria.filter((x) => x !== id); render(); });
+          el.__sync = () => el.querySelectorAll('.tcg-input').forEach((n) => n.__sync());
+          return el;
+        }
+        if (id === 'foil') {
+          const el = h(`<div class="job-config__criteria-detail" data-crit="foil"><div class="job-config__foil-group"><p class="job-config__foil-label">Foil</p><div class="foil-slot"></div></div><button type="button" class="job-config__criteria-remove" aria-label="Remove foil criteria">×</button></div>`);
+          const slot = el.querySelector('.foil-slot');
+          const foilOnly = () => isSiftOnly && cfg().selectedCriteria.length === 1 && cfg().selectedCriteria[0] === 'foil';
+          const opts = h('<div class="job-config__foil-options"></div>');
+          opts.appendChild(makeRadio('foil-options', 'Foil cards', 'foil', () => cfg().foilPreference, (v) => { cfg().foilPreference = v; }));
+          opts.appendChild(makeRadio('foil-options', 'Normal cards', 'non-foil', () => cfg().foilPreference, (v) => { cfg().foilPreference = v; }));
+          const note = h('<p class="typography-body margin-0">Bin 1 will include foil cards.</p>');
+          el.__sync = () => {
+            const fo = foilOnly();
+            if (fo && opts.parentNode) opts.remove();
+            if (fo && !note.parentNode) slot.appendChild(note);
+            if (!fo && note.parentNode) note.remove();
+            if (!fo && !opts.parentNode) slot.appendChild(opts);
+            opts.querySelectorAll('.tcg-input-radio').forEach((n) => n.__sync());
+          };
+          el.__sync();
+          el.querySelector('.job-config__criteria-remove').addEventListener('click', () => { cfg().selectedCriteria = cfg().selectedCriteria.filter((x) => x !== 'foil'); cfg().foilPreference = null; render(); });
+          return el;
+        }
+      };
+      root.__syncCriteria = () => {
+        const sel = cfg().selectedCriteria;
+        ['price', 'rarity', 'color', 'foil'].forEach((id) => {
+          const want = sel.includes(id);
+          if (want && !blocks[id]) { blocks[id] = makeBlock(id); }
+          if (!want && blocks[id]) { blocks[id].remove(); delete blocks[id]; }
+        });
+        // keep site order
+        ['price', 'rarity', 'color', 'foil'].forEach((id) => { if (blocks[id]) details.appendChild(blocks[id]); });
+        Object.values(blocks).forEach((b) => b.__sync());
+        const mm = root.querySelector('.job-config__match-mode');
+        mm.hidden = sel.length < 2;
+        mm.querySelectorAll('.tcg-input-radio').forEach((n) => n.__sync());
+      };
+      const mslot = root.querySelector('.match-slot');
+      mslot.appendChild(makeRadio('match-mode', 'AND: Match all criteria', 'and', () => cfg().matchMode, (v) => { cfg().matchMode = v; }));
+      mslot.appendChild(makeRadio('match-mode', 'OR: Match any criteria', 'or', () => cfg().matchMode, (v) => { cfg().matchMode = v; }));
+    }
+
+    // Identification: condition loads asynchronously (skeleton first), language is disabled.
+    const condSlot = root.querySelector('.cond-slot');
+    setTimeout(() => {
+      condSlot.innerHTML = '';
+      condSlot.appendChild(makeSelect({ cls: 'job-config__condition-select', label: 'Condition', items: CONDITIONS, multiple: false,
+        getValue: () => cfg().selectedCondition, setValue: (v) => { cfg().selectedCondition = v; } }));
+      root.querySelector('.lang-slot').appendChild(makeSelect({ cls: 'job-config__language-select', label: 'Language', items: ['English'], multiple: false, disabled: true,
+        getValue: () => cfg().selectedLanguage, setValue: () => {} }));
+      render();
+    }, 400);
+    root.querySelector('.ff-slot').appendChild(makeSelect({ cls: 'job-config__foil-finish-select', label: 'Foil finish', items: FOIL_FINISH[g], multiple: false,
+      getValue: () => cfg().foilFinish, setValue: (v) => { cfg().foilFinish = v; } }));
+
+    if (!isSiftOnly) {
+      const bslot = root.querySelector('.bins-slot');
+      (isScanOnly ? [2, 3] : [1, 2, 3]).forEach((n) => {
+        const label = n === 1 ? 'Bin 1 (matches sift criteria)' : n === 2 ? (isScanOnly ? 'Bin 2 (matched to catalog)' : 'Bin 2 (does not match sift criteria)') : 'Bin 3 (unidentified cards)';
+        bslot.appendChild(makeCheckbox(label, () => cfg().selectedBins.includes(n), (on) => { const s = new Set(cfg().selectedBins); on ? s.add(n) : s.delete(n); cfg().selectedBins = [...s].sort(); }));
+      });
+      const batch = root.querySelector('.batch-slot');
+      batch.appendChild(makeRadio('batch-name-mode', 'Default Batch Name', 'default', () => cfg().batchNameMode, (v) => { cfg().batchNameMode = v; }));
+      batch.appendChild(makeRadio('batch-name-mode', 'Custom Batch Name', 'custom', () => cfg().batchNameMode, (v) => { cfg().batchNameMode = v; }));
+    }
+
+    root.__sync = () => {
+      root.querySelectorAll('.job-config__criteria-card').forEach((b) => b.__sync());
+      if (root.__syncCriteria) root.__syncCriteria();
+      root.querySelectorAll('.cond-slot .tcg-input, .lang-slot .tcg-input, .ff-slot .tcg-input').forEach((n) => n.__sync());
+      root.querySelectorAll('.bins-slot .tcg-input-checkbox, .batch-slot .tcg-input-radio').forEach((n) => n.__sync());
+      // summary
+      const c = cfg();
+      const siftRows = root.querySelector('.sift-rows');
+      if (siftRows) {
+        const foilOnly = isSiftOnly && c.selectedCriteria.length === 1 && c.selectedCriteria[0] === 'foil';
+        const rows = foilOnly ? ['Foil sift only'] : c.selectedCriteria.map((id) => {
+          if (id === 'price') return c.priceThreshold == null ? null : `Price greater than or equal to $${c.priceThreshold.toFixed(2)}`;
+          if (id === 'rarity') return c.selectedRarity.length ? c.selectedRarity.join(', ') : null;
+          if (id === 'color') return c.selectedColor.length ? c.selectedColor.join(', ') : null;
+          if (id === 'foil') return c.foilPreference ? (c.foilPreference === 'foil' ? 'Foil cards' : 'Normal cards') : null;
+        }).filter(Boolean);
+        siftRows.innerHTML = rows.length ? rows.map((r, i) => `<div class="job-summary__row"><p class="typography-body margin-0">${esc(r)}</p>${c.matchMode && i < rows.length - 1 ? `<span class="job-summary__connector" data-testid="job-summary-connector">${c.matchMode.toUpperCase()}</span>` : ''}</div>`).join('')
+          : '<p class="typography-body color-surface-subdued margin-0">At least one criteria is required to start a job.</p>';
+      }
+      const ident = [state.game ? state.game.name : null, c.selectedLanguage, c.selectedCondition, c.foilFinish].filter(Boolean);
+      root.querySelector('.ident-rows').innerHTML = ident.map((t) => `<p class="typography-body margin-0">${esc(t)}</p>`).join('');
+    };
+    root.__sync();
+    return root;
+  }
+
+  /* ---------- shell ---------- */
+  function validate() {
+    if (state.step === 1) return !state.game ? 'Select a game to continue.' : !state.jobType ? 'Select a job type to continue.' : '';
+    const c = state.jobConfig; const jt = state.jobType;
+    if (jt !== 'scan-only') {
+      if (!c.selectedCriteria.length) return 'Complete all required fields before starting the job.';
+      if (c.selectedCriteria.includes('price') && !(c.priceThreshold > 0)) return 'Complete all required fields before starting the job.';
+      if (c.selectedCriteria.includes('rarity') && !c.selectedRarity.length) return 'Complete all required fields before starting the job.';
+      if (c.selectedCriteria.includes('color') && !c.selectedColor.length) return 'Complete all required fields before starting the job.';
+      const foilOnly = jt === 'sift-only' && c.selectedCriteria.length === 1 && c.selectedCriteria[0] === 'foil';
+      if (c.selectedCriteria.includes('foil') && !foilOnly && !c.foilPreference) return 'Complete all required fields before starting the job.';
+      if (c.selectedCriteria.length >= 2 && !c.matchMode) return 'Complete all required fields before starting the job.';
+      if (!foilOnly && !c.selectedCondition) return 'Complete all required fields before starting the job.';
+    } else if (!c.selectedCondition) return 'Complete all required fields before starting the job.';
+    return '';
+  }
+
+  const shell = h(`
+    <div class="sellerportal-sifter-job padding-md">
+      <div class="sellerportal-sifter-job__content"></div>
+      <div class="sellerportal-sifter-job__footer margin-t-sm">
+        <p role="alert" aria-live="assertive" class="sellerportal-sifter-job__validation-message sellerportal-sifter-job__validation-message--hidden"></p>
+        <div class="sellerportal-sifter-job__footer-bottom">
+          <div class="sellerportal-sifter-job__footer-left"><button type="button" class="tcg-standard-button" id="go-back">Go back</button></div>
+          <div class="sellerportal-sifter-job__footer-right"><div class="sellerportal-sifter-job__footer-actions">
+            <button type="button" class="tcg-standard-button sellerportal-sifter-job__footer-button">Cancel</button>
+            <button type="button" class="tcg-standard-button priority sellerportal-sifter-job__footer-button sellerportal-sifter-job__footer-primary">Continue</button>
+          </div></div>
+        </div>
+      </div>
+    </div>`);
+  const content = shell.querySelector('.sellerportal-sifter-job__content');
+  const primary = shell.querySelector('.sellerportal-sifter-job__footer-primary');
+  const vmsg = shell.querySelector('.sellerportal-sifter-job__validation-message');
+  primary.addEventListener('click', () => {
+    const v = validate();
+    state.validation = v;
+    if (v) return render();
+    if (state.step === 1) { state.step = 2; step2 = null; return render(); }
+    const c = state.jobConfig;
+    state.started = { game: state.game && state.game.code, jobType: state.jobType, jobConfig: JSON.parse(JSON.stringify(c)), at: Date.now() };
+    window.__started = state.started;
+    history.pushState({}, '', '/scan-identify/sifter/sift-only-job/dev-1');
+    render();
+  });
+  shell.querySelector('#go-back').addEventListener('click', () => { if (state.step > 1) { state.step = 1; state.validation = ''; render(); } });
+  document.getElementById('mock-reset').addEventListener('click', () => window.__mock.reset());
+
+  function render() {
+    if (state.started) {
+      app.innerHTML = '<div class="sift-only-job" data-testid="sift-only-job" style="padding:2rem"><h1>Sift only job in progress</h1><p data-testid="sift-only-status">Running on SRS-01</p><button type="button" data-testid="sift-only-new-job-btn">New job</button></div>';
+      return;
+    }
+    if (!shell.parentNode) app.appendChild(shell);
+    if (state.step === 1) {
+      if (!step1) step1 = buildStep1();
+      if (content.firstElementChild !== step1) { content.innerHTML = ''; content.appendChild(step1); }
+      step1.__sync();
+      primary.textContent = 'Continue';
+    } else {
+      if (!step2) step2 = buildStep2();
+      if (content.firstElementChild !== step2) { content.innerHTML = ''; content.appendChild(step2); }
+      step2.__sync();
+      primary.textContent = 'Start job';
+    }
+    vmsg.textContent = state.validation;
+    vmsg.classList.toggle('sellerportal-sifter-job__validation-message--hidden', !state.validation);
+  }
+  window.addEventListener('popstate', () => { if (state.started) { state.started = null; window.__started = undefined; render(); } });
+  render();
+})();
+</script>
+</body>
+</html>
