@@ -31,6 +31,7 @@
   .tcg-input-select.is-open .tcg-base-dropdown { display: block; }
   .tcg-base-dropdown__item { padding: 6px 10px; cursor: pointer; }
   .tcg-base-dropdown__item.is-selected { background: #eaf0ff; font-weight: 600; }
+  .tcg-base-dropdown__item.is-disabled { color: #aaa; cursor: not-allowed; }
   .tcg-input-field__label { display: block; font-size: 12px; font-weight: 600; margin: 8px 0 4px; }
   .tcg-skeleton { height: 42px; width: 287px; background: #eee; border-radius: 6px; }
   .job-summary__row { display: flex; gap: 6px; align-items: center; }
@@ -106,7 +107,7 @@
 
   let uid = 0;
   /** Faithful copy of TcgInputSelect + TcgBaseDropdown markup. Patches in place on sync(). */
-  function makeSelect({ cls, label, items, multiple, disabled, getValue, setValue }) {
+  function makeSelect({ cls, label, items, multiple, disabled, getValue, setValue, isDisabled }) {
     const id = 'tcg-select-' + (++uid);
     const root = h(`
       <div class="tcg-input ${cls}">
@@ -130,7 +131,7 @@
       const li = h(`<li class="tcg-base-dropdown__item" role="option" aria-label="${esc(text)}" id="${id}-dropdown-item-${i}">${multiple ? '<span class="tcg-base-dropdown__checkbox"></span>' : ''}<span class="tcg-base-dropdown__item-content"><span>${esc(text)}</span></span></li>`);
       li.addEventListener('click', (e) => {
         e.preventDefault();
-        if (disabled) return;
+        if (disabled || li.classList.contains('is-disabled')) return;
         if (multiple) {
           const cur = getValue() || [];
           setValue(cur.includes(text) ? cur.filter((x) => x !== text) : cur.concat(text));
@@ -151,7 +152,10 @@
     root.__sync = () => {
       const v = getValue();
       const sel = multiple ? (v || []) : (v ? [v] : []);
-      ul.querySelectorAll('li').forEach((li) => li.classList.toggle('is-selected', sel.includes(li.getAttribute('aria-label'))));
+      ul.querySelectorAll('li').forEach((li) => {
+        li.classList.toggle('is-selected', sel.includes(li.getAttribute('aria-label')));
+        li.classList.toggle('is-disabled', !!(isDisabled && isDisabled(li.getAttribute('aria-label'))));
+      });
       trigger.querySelector('span').textContent = sel.length ? sel.join(', ') : 'Select';
     };
     root.__sync();
@@ -213,7 +217,7 @@
     const jt = state.jobType || 'sift-only';
     const isSiftOnly = jt === 'sift-only';
     const isScanOnly = jt === 'scan-only';
-    const title = isScanOnly ? 'Scan job setup' : isSiftOnly ? 'Sift job setup' : 'Scan and sift job setup';
+    const title = isScanOnly ? 'Scan job setup' : isSiftOnly ? 'Sift job setup' : 'Scan & sift job setup';
     const root = h(`
       <div class="job-config">
         <header class="job-config__header"><h2 class="job-config__title typography-heading-lg margin-0">${title}</h2><p class="job-config__subtitle">Complete the selections below. Then, select "Start job" to begin.</p></header>
@@ -352,7 +356,8 @@
     setTimeout(() => {
       condSlot.innerHTML = '';
       condSlot.appendChild(makeSelect({ cls: 'job-config__condition-select', label: 'Condition', items: CONDITIONS, multiple: false,
-        getValue: () => cfg().selectedCondition, setValue: (v) => { cfg().selectedCondition = v; } }));
+        getValue: () => cfg().selectedCondition, setValue: (v) => { cfg().selectedCondition = v; },
+        isDisabled: (name) => cfg().selectedCriteria.includes('price') && !(PRICE_CONDS[g] || ['Near Mint']).includes(name) }));
       root.querySelector('.lang-slot').appendChild(makeSelect({ cls: 'job-config__language-select', label: 'Language', items: ['English'], multiple: false, disabled: true,
         getValue: () => cfg().selectedLanguage, setValue: () => {} }));
       render();
@@ -371,9 +376,16 @@
       batch.appendChild(makeRadio('batch-name-mode', 'Custom Batch Name', 'custom', () => cfg().batchNameMode, (v) => { cfg().batchNameMode = v; }));
     }
 
+    const identBlock = root.querySelector('.job-config__identification');
+    const ffBlock = root.querySelector('.job-config__foil-finish');
+    const identAnchor = ffBlock.nextSibling;
     root.__sync = () => {
       root.querySelectorAll('.job-config__criteria-card').forEach((b) => b.__sync());
       if (root.__syncCriteria) root.__syncCriteria();
+      const c0 = cfg();
+      const foilOnly = isSiftOnly && c0.selectedCriteria.length === 1 && c0.selectedCriteria[0] === 'foil';
+      if (foilOnly) { identBlock.remove(); ffBlock.remove(); }
+      else if (!identBlock.parentNode) { identBlock.parentNode || root.querySelector('.job-config__section').insertBefore(identBlock, identAnchor); root.querySelector('.job-config__section').insertBefore(ffBlock, identAnchor); }
       root.querySelectorAll('.cond-slot .tcg-input, .lang-slot .tcg-input, .ff-slot .tcg-input').forEach((n) => n.__sync());
       root.querySelectorAll('.bins-slot .tcg-input-checkbox, .batch-slot .tcg-input-radio').forEach((n) => n.__sync());
       // summary

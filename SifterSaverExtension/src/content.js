@@ -239,14 +239,22 @@
     state.busy = true;
     state.notice = { kind: 'info', text: `Applying "${preset.name}"…` };
     pushState();
+    const before = { ...state.ctx };
     let report;
     try {
       report = await dom.applyPreset(preset, { onProgress: (f) => { state.notice = { kind: 'info', text: `Applying "${preset.name}"… (${f})` }; pushState(true); } });
     } finally {
       state.busy = false;
     }
-    const form = dom.readForm();
-    const differences = form ? P.diff(preset, form) : [];
+    // The user may have navigated while the form was being filled; don't claim a match then.
+    const now = dom.readContext();
+    const form = dom.getJobConfig() ? dom.readForm() : null;
+    if (!form || now.step !== 2 || now.gameCode !== before.gameCode || now.jobType !== before.jobType) {
+      state.lastApplied = null;
+      notify('warn', `Stopped applying "${preset.name}": the page changed while the form was being filled.`);
+      return;
+    }
+    const differences = P.diff(preset, form);
     state.lastApplied = { preset, at: Date.now(), report, differences };
     if (report.failed.length || differences.length) {
       const bits = [];

@@ -100,28 +100,41 @@
     return $$(SEL.dropdownItem, root).map((li) => li.getAttribute('aria-label') || text(li));
   }
 
+  /**
+   * Select the given option labels. Options carrying `is-disabled` (e.g. conditions the
+   * site does not allow with price sift) are left alone and reported separately.
+   * Resolves to { missing: string[], disabled: string[] }.
+   */
   async function setSelect(root, labels, { multiple }) {
     const wanted = new Set((labels || []).map(C.normalize));
     const items = $$(SEL.dropdownItem, root);
     if (!items.length) throw new Error('no options rendered');
-    const missing = [...wanted].filter((w) => !items.some((li) => C.normalize(li.getAttribute('aria-label') || text(li)) === w));
+    const labelOf = (li) => li.getAttribute('aria-label') || text(li);
+    const isDisabled = (li) => li.classList.contains('is-disabled') || li.getAttribute('aria-disabled') === 'true';
+    const missing = [];
+    const disabled = [];
+    for (const w of wanted) {
+      const li = items.find((x) => C.normalize(labelOf(x)) === w);
+      if (!li) missing.push(w);
+      else if (isDisabled(li) && !li.classList.contains('is-selected')) disabled.push(labelOf(li));
+    }
     if (multiple) {
       for (const li of items) {
         const isSel = li.classList.contains('is-selected');
-        const want = wanted.has(C.normalize(li.getAttribute('aria-label') || text(li)));
-        if (isSel !== want) {
+        const want = wanted.has(C.normalize(labelOf(li)));
+        if (isSel !== want && !isDisabled(li)) {
           li.click();
           await tick();
         }
       }
     } else {
-      const target = items.find((li) => wanted.has(C.normalize(li.getAttribute('aria-label') || text(li))));
-      if (target && !target.classList.contains('is-selected')) {
+      const target = items.find((li) => wanted.has(C.normalize(labelOf(li))));
+      if (target && !target.classList.contains('is-selected') && !isDisabled(target)) {
         target.click();
         await tick();
       }
     }
-    return missing;
+    return { missing, disabled };
   }
 
   /* ---------- generic helpers ---------- */
@@ -276,9 +289,15 @@
     const progress = (opts && opts.onProgress) || (() => {});
     const fail = (field, reason) => report.failed.push({ field, reason });
     const ok = (field) => report.applied.push(field);
+    const selectResult = (field, r, disabledHint) => {
+      if (r.missing.length) fail(field, `options not found: ${r.missing.join(', ')}`);
+      else if (r.disabled.length) fail(field, `${r.disabled.join(', ')} ${disabledHint || 'is not selectable here'}`);
+      else ok(field);
+    };
 
     const cfg = getJobConfig();
     if (!cfg) throw new Error('The job setup step is not on screen.');
+    const ctx = readContext();
 
     // 1. Criteria cards — deselect unwanted first so the site clears their values.
     progress('criteria');
@@ -292,8 +311,13 @@
     else ok('criteria');
     await tick(80);
 
+    // What the page actually has selected now drives every later step (not the preset),
+    // so criteria this game lacks never make us wait for inputs that will not appear.
+    const active = new Set(cards.filter((c) => pressed(c.el)).map((c) => c.id));
+    const foilOnly = ctx.jobType === 'sift-only' && active.size === 1 && active.has('foil');
+
     // 2. Price
-    if (wanted.has('price')) {
+    if (active.has('price')) {
       progress('price');
       try {
         const input = await waitFor(() => $(SEL.priceInput), 3000, 'price input');
@@ -307,48 +331,45 @@
     }
 
     // 3. Rarity
-    if (wanted.has('rarity')) {
+    if (active.has('rarity')) {
       progress('rarity');
       try {
         const root = await waitFor(() => findCriteriaSelect((l) => /^rarity$/i.test(l)), 3000, 'rarity select');
-        const missing = await setSelect(root, preset.rarity || [], { multiple: true });
-        if (missing.length) fail('rarity', `options not found: ${missing.join(', ')}`);
-        else ok('rarity');
+        selectResult('rarity', await setSelect(root, preset.rarity || [], { multiple: true }));
       } catch (e) {
         fail('rarity', e.message);
       }
     }
 
     // 4. Color / energy / ink
-    if (wanted.has('color')) {
+    if (active.has('color')) {
       progress('color');
       try {
         const root = await waitFor(() => findCriteriaSelect((l) => !/^rarity$/i.test(l)), 3000, 'color select');
-        const missing = await setSelect(root, preset.color || [], { multiple: true });
-        if (missing.length) fail('color', `options not found: ${missing.join(', ')}`);
-        else ok('color');
+        selectResult('color', await setSelect(root, preset.color || [], { multiple: true }));
       } catch (e) {
         fail('color', e.message);
       }
     }
 
-    // 5. Foil preference
-    if (wanted.has('foil')) {
+    // 5. Foil preference (no radios on a foil-only sift: the site fixes it to foil cards)
+    if (active.has('foil')) {
       progress('foil');
       await tick();
       const radios = $$(SEL.foilRadio);
       if (radios.length) {
         if (preset.foil && clickRadio(radios, preset.foil)) ok('foil');
         else if (preset.foil) fail('foil', `no option "${preset.foil}"`);
-        // preset without a foil choice: leave as is
+      } else if (foilOnly) {
+        ok('foil');
       } else {
-        ok('foil'); // foil-only sift: site fixes it to "foil cards"
+        fail('foil', 'foil options did not appear');
       }
       await tick();
     }
 
-    // 6. Match mode
-    if (wanted.size >= 2) {
+    // 6. Match mode (only rendered with two or more criteria on the page)
+    if (active.size >= 2) {
       progress('matchMode');
       try {
         const radios = await waitFor(() => { const r = $$(SEL.matchModeRadio); return r.length ? r : null; }, 3000, 'match mode');
@@ -362,34 +383,30 @@
       }
     }
 
-    // 7. Condition (waits for the catalog data to load)
-    if (preset.condition && !(preset.jobType === 'sift-only' && wanted.size === 1 && wanted.has('foil'))) {
+    // 7. Condition + 8. foil finish. The site removes both blocks on a foil-only sift job;
+    // otherwise the condition select shows a skeleton until the catalog loads.
+    const priceHint = active.has('price') ? 'is not allowed with price sift for this game' : 'is not selectable here';
+    if (preset.condition && !foilOnly) {
       progress('condition');
       try {
         const root = await waitFor(() => { const r = $(SEL.conditionSelect); return r && $(SEL.dropdownItem, r) ? r : null; }, 8000, 'condition select');
-        const missing = await setSelect(root, [preset.condition], { multiple: false });
-        if (missing.length) fail('condition', `option not found: ${preset.condition}`);
-        else ok('condition');
+        selectResult('condition', await setSelect(root, [preset.condition], { multiple: false }), priceHint);
       } catch (e) {
         fail('condition', e.message);
       }
     }
-
-    // 8. Foil finish
-    if (preset.foilFinish) {
+    if (preset.foilFinish && !foilOnly) {
       progress('foilFinish');
       try {
-        const root = await waitFor(() => { const r = $(SEL.foilFinishSelect); return r && $(SEL.dropdownItem, r) ? r : null; }, 8000, 'foil finish select');
-        const missing = await setSelect(root, [preset.foilFinish], { multiple: false });
-        if (missing.length) fail('foilFinish', `option not found: ${preset.foilFinish}`);
-        else ok('foilFinish');
+        const root = await waitFor(() => { const r = $(SEL.foilFinishSelect); return r && $(SEL.dropdownItem, r) ? r : null; }, 4000, 'foil finish select');
+        selectResult('foilFinish', await setSelect(root, [preset.foilFinish], { multiple: false }));
       } catch (e) {
         fail('foilFinish', e.message);
       }
     }
 
     // 9. Bins + batch name mode (scan jobs only; the section is absent for sift-only)
-    if (Array.isArray(preset.bins) && preset.bins.length) {
+    if (Array.isArray(preset.bins) && preset.bins.length && ctx.jobType !== 'sift-only') {
       const boxes = $$(SEL.binCheckbox);
       if (boxes.length) {
         progress('bins');
@@ -403,7 +420,7 @@
         ok('bins');
       }
     }
-    if (preset.batchNameMode) {
+    if (preset.batchNameMode && ctx.jobType !== 'sift-only') {
       const radios = $$(SEL.batchModeRadio);
       if (radios.length && clickRadio(radios, preset.batchNameMode)) ok('batchNameMode');
     }

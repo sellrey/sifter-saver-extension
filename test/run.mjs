@@ -86,6 +86,7 @@ async function clickStart() {
   await page.click('.sellerportal-sifter-job__footer-primary');
 }
 async function chooseGameAndJob(game, job) {
+  if (await page.$('.job-config')) await page.click('#go-back');
   await page.waitForSelector('.select-game-and-job-type');
   await mockSelect('select-game-and-job-type__game-select', game);
   await page.click(`.select-game-and-job-type__card[aria-label="${job}"]`);
@@ -243,6 +244,53 @@ await test('scan & sift preset round-trips bins and colour', async () => {
   eq(await cfg(), before, 'scan & sift form after apply');
 });
 
+await test('foil-only sift preset applies fast without waiting for removed blocks', async () => {
+  await page.goto(WIZARD_URL);
+  await sidebar().waitFor();
+  await chooseGameAndJob('Pokémon', 'Sift only');
+  await page.click('.job-config__criteria-card:has-text("Foil")');
+  await page.waitForSelector('.job-config__condition-select', { state: 'detached' });
+  assert(/Bin 1 will include foil cards/.test(await page.textContent('.job-config')), 'mock should show the foil-only note');
+  await page.click('[data-action="new"]');
+  await page.fill('#ssv-new-name', 'PKM foil only');
+  await page.click('form[data-form="new"] button[type="submit"]');
+  await page.waitForSelector('.ssv-preset:has-text("PKM foil only")');
+  await page.click('#mock-reset');
+  const t0 = Date.now();
+  await page.click('.ssv-preset:has-text("PKM foil only") [data-action="apply"]');
+  await page.waitForSelector('.ssv-notice--ok', { timeout: 15000 });
+  const took = Date.now() - t0;
+  assert(took < 2500, `apply took ${took}ms; it should not wait for condition/foil finish on a foil-only sift`);
+  const c = await cfg();
+  eq(c.selectedCriteria, ['foil'], 'criteria after foil-only apply');
+  await page.locator('.ssv-preset:has-text("PKM foil only") [data-action="delete"]').click();
+  await modal().waitFor();
+  await page.click('.ssv-modal [data-action="ok"]');
+  await page.waitForSelector('.ssv-preset:has-text("PKM foil only")', { state: 'detached' });
+});
+
+await test('condition not allowed with price sift is reported, not silently skipped', async () => {
+  const json = JSON.stringify({ presets: [{ id: 'bad-cond', name: 'PKM price HP', jobType: 'sift-only', gameCode: 'PKM', criteria: ['price'], priceThreshold: 1, condition: 'Heavily Played', foilFinish: 'Holofoil' }] });
+  await openSettings();
+  await page.setInputFiles('input[data-file="import"]', { name: 'p.json', mimeType: 'application/json', buffer: Buffer.from(json) });
+  await page.waitForSelector('.ssv-preset:has-text("PKM price HP")');
+  await page.click('#mock-reset');
+  await page.click('.ssv-preset:has-text("PKM price HP") [data-action="apply"]');
+  await page.waitForSelector('.ssv-notice--warn', { timeout: 15000 });
+  const note = await page.textContent('.ssv-notice');
+  assert(/Heavily Played is not allowed with price sift for this game/.test(note), `notice was "${note}"`);
+  const c = await cfg();
+  assert(c.selectedCondition === null, 'disabled condition must not be selected');
+  eq(c.priceThreshold, 1, 'price still applied');
+  await page.locator('.ssv-preset:has-text("PKM price HP") [data-action="delete"]').click();
+  await modal().waitFor();
+  await page.click('.ssv-modal [data-action="ok"]');
+  await page.waitForSelector('.ssv-preset:has-text("PKM price HP")', { state: 'detached' });
+  await chooseGameAndJob('Magic: The Gathering', 'Scan & sift');
+  await page.check('input[data-setting="showAllPresets"]');
+  await page.waitForSelector('.ssv-preset:has-text("MTG blue/red normal")');
+});
+
 await test('rename, duplicate and delete', async () => {
   const card = page.locator('.ssv-preset:has-text("MTG blue/red normal")');
   await card.locator('[data-action="rename"]').click();
@@ -259,6 +307,8 @@ await test('rename, duplicate and delete', async () => {
 });
 
 await test('disabling the confirmation lets Start job through', async () => {
+  await page.click('.ssv-preset:has-text("MTG renamed") [data-action="apply"]');
+  await page.waitForSelector('.ssv-notice--ok', { timeout: 15000 });
   await openSettings();
   await page.uncheck('input[data-setting="confirmEnabled"]');
   await sleep(200);
