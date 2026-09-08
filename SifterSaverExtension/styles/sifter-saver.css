@@ -31,7 +31,8 @@ html.ssv-open body {
   right: 0;
   height: 100vh;
   width: var(--ssv-w);
-  z-index: 2147483000;
+  /* Above page content, popovers (30) and dropdowns, below the design system's dialogs/drawers (100) and loaders (101). */
+  z-index: 50;
   background: var(--ssv-bg);
   border-left: 1px solid var(--ssv-line);
   box-shadow: -6px 0 20px rgba(20, 30, 60, 0.08);

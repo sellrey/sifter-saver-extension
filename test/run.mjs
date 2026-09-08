@@ -343,6 +343,43 @@ await test('import merges presets from JSON', async () => {
   await page.screenshot({ path: path.join(OUT, '04-sidebar-mixed.png') });
 });
 
+await test('import normalises hand-edited presets and tolerates junk records', async () => {
+  const json = JSON.stringify({ presets: [
+    { id: 'norm-1', name: 'Hand edited', jobType: 'scan-and-sift', gameCode: 'MTG', criteria: ['color', 'bogus'], color: ['Blue'], rarity: 'Rare', bins: ['1', '2'], condition: 'Near Mint', foilFinish: 'Foil', priceThreshold: '1.5' },
+    { id: 'junk-1', name: 'Junk', criteria: 5, rarity: { a: 1 }, bins: 'x' },
+    'not an object',
+  ] });
+  await openSettings();
+  await page.setInputFiles('input[data-file="import"]', { name: 'p.json', mimeType: 'application/json', buffer: Buffer.from(json) });
+  await page.waitForSelector('.ssv-notice--ok');
+  const note = await page.textContent('.ssv-notice');
+  assert(/Imported 2 new/.test(note) && /skipped 1/.test(note), `notice was "${note}"`);
+  await chooseGameAndJob('Magic: The Gathering', 'Scan & sift');
+  await page.check('input[data-setting="showAllPresets"]');
+  const summary = await page.textContent('.ssv-preset:has-text("Hand edited") .ssv-preset__summary');
+  eq(summary.trim(), 'Color: Blue · Near Mint · Foil · Bins 1/2', 'normalised summary (bogus criterion and non-array rarity dropped, price ignored without price criterion)');
+  await page.click('.ssv-preset:has-text("Hand edited") [data-action="apply"]');
+  await page.waitForSelector('.ssv-notice--ok', { timeout: 15000 });
+  const c = await cfg();
+  eq(c.selectedCriteria, ['color'], 'criteria');
+  eq(c.selectedColor, ['Blue'], 'color');
+  eq(c.selectedBins, [1, 2], 'bins coerced from strings');
+  eq(c.selectedCondition, 'Near Mint', 'condition');
+  assert(await page.locator('.ssv-preset:has-text("Hand edited") .ssv-status--ok').count() === 1, 'normalised preset should match the form after apply');
+});
+
+await test('settings stay open across re-renders and the gate survives a re-rendered button', async () => {
+  await openSettings();
+  await page.click('.job-config__criteria-card:has-text("Rarity")'); // page mutation -> sidebar re-render
+  await page.click('.job-config__criteria-card:has-text("Rarity")');
+  assert(await page.$('details.ssv-settings[open]'), 'settings should still be open after page mutations');
+  await page.evaluate(() => { const b = document.querySelector('.sellerportal-sifter-job__footer-primary'); b.replaceWith(b.cloneNode(true)); });
+  await clickStart();
+  await modal().waitFor();
+  await page.click('.ssv-modal [data-action="back"]');
+  await modal().waitFor({ state: 'detached' });
+});
+
 await context.close();
 fs.rmSync(userDataDir, { recursive: true, force: true });
 const failed = results.filter((r) => !r.ok);

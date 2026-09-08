@@ -37,29 +37,44 @@
     return id === 'color' ? C.colorCardLabel(gameCode) : id.charAt(0).toUpperCase() + id.slice(1);
   }
 
-  /** Build a preset object from a form snapshot. */
+  const strList = (v) => (Array.isArray(v) ? v.map((x) => String(x == null ? '' : x).trim()).filter(Boolean) : []);
+  const str = (v) => (v == null ? null : String(v).trim() || null);
+  const oneOf = (v, allowed) => (allowed.includes(v) ? v : null);
+
+  /**
+   * Build a normalised preset from a form snapshot or any preset-shaped object
+   * (imports, storage). Every field is coerced to its expected type so nothing
+   * downstream has to defend against hand-edited JSON.
+   */
   function presetFromForm(form, name) {
+    const f = form && typeof form === 'object' && !Array.isArray(form) ? form : {};
     const now = new Date().toISOString();
-    return {
+    const price = f.priceThreshold == null || f.priceThreshold === '' ? NaN : Number(f.priceThreshold);
+    const jobType = oneOf(f.jobType, Object.keys(C.JOB_TYPES));
+    const gameCode = C.GAMES.some((g) => g.code === f.gameCode) ? f.gameCode : C.gameCodeFromName(f.gameName);
+    const wantedCriteria = new Set(strList(f.criteria).map((x) => x.toLowerCase()));
+    const p = {
       id: SS.storage.uuid(),
-      name: name || defaultName(form),
+      name: '',
       createdAt: now,
       updatedAt: now,
-      jobType: form.jobType || null,
-      gameCode: form.gameCode || null,
-      gameName: form.gameName || C.gameName(form.gameCode),
-      criteria: [...(form.criteria || [])],
-      priceThreshold: form.priceThreshold == null ? null : Number(form.priceThreshold),
-      rarity: [...(form.rarity || [])],
-      color: [...(form.color || [])],
-      foil: form.foil || null,
-      matchMode: form.matchMode || null,
-      condition: form.condition || null,
-      language: form.language || null,
-      foilFinish: form.foilFinish || null,
-      bins: [...(form.bins || [])],
-      batchNameMode: form.batchNameMode || null,
+      jobType,
+      gameCode: gameCode || null,
+      gameName: str(f.gameName) || C.gameName(gameCode) || null,
+      criteria: C.CRITERIA_ORDER.filter((id) => wantedCriteria.has(id)),
+      priceThreshold: Number.isFinite(price) && price >= 0 ? Math.round(price * 100) / 100 : null,
+      rarity: strList(f.rarity),
+      color: strList(f.color),
+      foil: oneOf(f.foil, ['foil', 'non-foil']),
+      matchMode: oneOf(f.matchMode, ['and', 'or']),
+      condition: str(f.condition),
+      language: str(f.language),
+      foilFinish: str(f.foilFinish),
+      bins: [...new Set((Array.isArray(f.bins) ? f.bins : []).map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= 3))].sort(),
+      batchNameMode: oneOf(f.batchNameMode, ['default', 'custom']),
     };
+    p.name = str(name) || defaultName(p);
+    return p;
   }
 
   function defaultName(form) {
@@ -178,14 +193,23 @@
     return gameOk && jobOk;
   }
 
+  /** Normalise one stored/imported record; null if it is not usable at all. */
   function validateImported(obj) {
-    if (!obj || typeof obj !== 'object') return null;
-    const p = presetFromForm(obj, obj.name);
-    if (obj.id) p.id = String(obj.id);
-    if (obj.createdAt) p.createdAt = obj.createdAt;
-    if (!p.gameCode && obj.gameName) p.gameCode = C.gameCodeFromName(obj.gameName);
-    return p;
+    try {
+      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
+      const p = presetFromForm(obj, obj.name);
+      if (obj.id != null && String(obj.id).trim()) p.id = String(obj.id).trim();
+      if (typeof obj.createdAt === 'string') p.createdAt = obj.createdAt;
+      if (typeof obj.updatedAt === 'string') p.updatedAt = obj.updatedAt;
+      return p;
+    } catch (_) {
+      return null;
+    }
   }
 
-  SS.presets = { FIELD_LABELS, presetFromForm, defaultName, summarize, describe, diff, warnings, matchesContext, validateImported, money, foilLabel, criteriaLabel };
+  function normalizeList(arr) {
+    return (Array.isArray(arr) ? arr : []).map(validateImported).filter(Boolean);
+  }
+
+  SS.presets = { FIELD_LABELS, presetFromForm, defaultName, summarize, describe, diff, warnings, matchesContext, validateImported, normalizeList, money, foilLabel, criteriaLabel };
 })();

@@ -25,18 +25,19 @@
   let bypassNextClick = false;
   let confirmOpen = false;
   let refreshQueued = false;
+  let warnedNoButton = false;
 
   /* ---------- boot ---------- */
 
   async function boot() {
     try {
-      state.presets = await storage.loadPresets();
+      state.presets = P.normalizeList(await storage.loadPresets());
       state.settings = await storage.loadSettings();
     } catch (e) {
       console.warn('[Sifter Saver] storage unavailable', e);
     }
     storage.onChanged(async (changes) => {
-      if (changes.presets) state.presets = Array.isArray(changes.presets.newValue) ? changes.presets.newValue : [];
+      if (changes.presets) state.presets = P.normalizeList(changes.presets.newValue);
       if (changes.settings) state.settings = { ...storage.DEFAULT_SETTINGS, ...(changes.settings.newValue || {}) };
       pushState();
     });
@@ -82,6 +83,10 @@
       if (state.lastApplied && (ctx.gameCode !== state.ctx.gameCode || ctx.jobType !== state.ctx.jobType)) state.lastApplied = null;
       state.ctx = ctx;
     }
+    if (ctx.step === 2 && !dom.getPrimaryButton() && !warnedNoButton) {
+      warnedNoButton = true;
+      state.notice = { kind: 'error', text: 'Sifter Saver cannot find the Start job button on this page, so the confirmation gate is not active. The site may have changed; see AGENTS.md.' };
+    }
     pushState(!changed);
   }
 
@@ -89,8 +94,12 @@
     if (!sidebar.isMounted()) return;
     let liveDiff = null;
     if (state.ctx.step === 2 && state.lastApplied) {
-      const form = dom.readForm();
-      liveDiff = form ? P.diff(state.lastApplied.preset, form) : null;
+      try {
+        const form = dom.readForm();
+        liveDiff = form ? P.diff(state.lastApplied.preset, form) : null;
+      } catch (e) {
+        console.warn('[Sifter Saver] could not read the form', e);
+      }
     }
     sidebar.update({ ...state, liveDiff }, quiet);
   }
@@ -131,10 +140,19 @@
         ],
       });
       if (choice === 'start') {
+        // Re-resolve the button: the page may have re-rendered while the dialog was open.
+        const target = dom.getPrimaryButton();
+        if (!target || !target.isConnected || target.disabled || !dom.isStartJobButton(target)) {
+          notify('warn', 'The Start job button changed while you were confirming. Check the form and click Start job again.');
+          return;
+        }
+        // click() dispatches synchronously, so the bypass never outlives this call.
         bypassNextClick = true;
-        btn.click();
-        // If the site's handler rejected synchronously nothing else to do; reset flag defensively.
-        setTimeout(() => { bypassNextClick = false; }, 500);
+        try {
+          target.click();
+        } finally {
+          bypassNextClick = false;
+        }
       }
     } finally {
       confirmOpen = false;
@@ -212,8 +230,10 @@
     return p;
   }
 
-  async function persist() {
-    await storage.savePresets(state.presets);
+  /** Write first, then commit to state, so a failed write never shows a phantom preset. */
+  async function commitPresets(next) {
+    await storage.savePresets(next);
+    state.presets = next;
     pushState();
   }
 
@@ -270,8 +290,7 @@
     const form = dom.readForm();
     if (!form) throw new Error('Go to the job setup step to save the current form as a preset.');
     const preset = P.presetFromForm(form, (name || '').trim());
-    state.presets.push(preset);
-    await persist();
+    await commitPresets([...state.presets, preset]);
     state.lastApplied = { preset, at: Date.now(), report: { applied: [], failed: [] }, differences: [] };
     notify('ok', `Saved "${preset.name}".`);
   }
@@ -290,20 +309,19 @@
       ],
     });
     if (choice !== 'ok') return;
-    const fresh = P.presetFromForm(form, existing.name);
-    Object.assign(existing, fresh, { id: existing.id, createdAt: existing.createdAt, name: existing.name });
-    await persist();
-    state.lastApplied = { preset: existing, at: Date.now(), report: { applied: [], failed: [] }, differences: [] };
-    notify('ok', `Updated "${existing.name}".`);
+    const updated = { ...P.presetFromForm(form, existing.name), id: existing.id, createdAt: existing.createdAt, name: existing.name };
+    await commitPresets(state.presets.map((p) => (p.id === id ? updated : p)));
+    state.lastApplied = { preset: updated, at: Date.now(), report: { applied: [], failed: [] }, differences: [] };
+    notify('ok', `Updated "${updated.name}".`);
   }
 
   async function rename(id, name) {
     const p = findPreset(id);
     const n = (name || '').trim();
     if (!n) throw new Error('Name cannot be empty.');
-    p.name = n;
-    p.updatedAt = new Date().toISOString();
-    await persist();
+    const updated = { ...p, name: n, updatedAt: new Date().toISOString() };
+    await commitPresets(state.presets.map((x) => (x.id === id ? updated : x)));
+    if (state.lastApplied && state.lastApplied.preset.id === id) state.lastApplied.preset = updated;
   }
 
   async function remove(id) {
@@ -318,17 +336,17 @@
       ],
     });
     if (choice !== 'ok') return;
-    state.presets = state.presets.filter((x) => x.id !== id);
+    await commitPresets(state.presets.filter((x) => x.id !== id));
     if (state.lastApplied && state.lastApplied.preset.id === id) state.lastApplied = null;
-    await persist();
     notify('ok', `Deleted "${p.name}".`);
   }
 
   async function duplicate(id) {
     const p = findPreset(id);
     const copy = { ...p, id: storage.uuid(), name: p.name + ' (copy)', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-    state.presets.splice(state.presets.indexOf(p) + 1, 0, copy);
-    await persist();
+    const next = [...state.presets];
+    next.splice(next.indexOf(p) + 1, 0, copy);
+    await commitPresets(next);
   }
 
   function exportPresets() {
@@ -354,15 +372,18 @@
     if (!arr) throw new Error('No presets found in that file.');
     let added = 0;
     let updated = 0;
+    let skipped = 0;
+    const next = [...state.presets];
     for (const raw of arr) {
       const p = P.validateImported(raw);
-      if (!p) continue;
-      const idx = state.presets.findIndex((x) => x.id === p.id);
-      if (idx >= 0) { state.presets[idx] = p; updated++; }
-      else { state.presets.push(p); added++; }
+      if (!p) { skipped++; continue; }
+      const idx = next.findIndex((x) => x.id === p.id);
+      if (idx >= 0) { next[idx] = p; updated++; }
+      else { next.push(p); added++; }
     }
-    await persist();
-    notify('ok', `Imported ${added} new and updated ${updated} existing preset${added + updated === 1 ? '' : 's'}.`);
+    if (!added && !updated) throw new Error('No usable presets found in that file.');
+    await commitPresets(next);
+    notify('ok', `Imported ${added} new and updated ${updated} existing preset${added + updated === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} unreadable record${skipped === 1 ? '' : 's'}` : ''}.`);
   }
 
   async function setSetting(key, value) {

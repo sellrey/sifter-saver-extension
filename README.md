@@ -25,11 +25,11 @@ The extension is unpacked (not from a store), so load it in developer mode.
 
 Chrome shows a harmless warning about the `browser_specific_settings` key; that key is only read by Firefox.
 
-**Firefox**
+**Firefox** (128 or newer)
 
 1. Open `about:debugging#/runtime/this-firefox`.
 2. Click **Load Temporary Add-on…** and pick `SifterSaverExtension/manifest.json`.
-3. Temporary add-ons are removed when Firefox closes. For a permanent install, zip the `SifterSaverExtension` folder and either sign it as an unlisted add-on at addons.mozilla.org, or use Firefox Developer Edition / ESR with `xpinstall.signatures.required` set to `false` in `about:config`.
+3. Temporary add-ons are removed when Firefox closes. On Firefox older than 128 a Manifest V3 extension does not get site access at install time, so the sidebar will not appear until you grant access to sellerportal.tcgplayer.com in the extension's Permissions tab. For a permanent install, zip the `SifterSaverExtension` folder and either sign it as an unlisted add-on at addons.mozilla.org, or use Firefox Developer Edition / ESR with `xpinstall.signatures.required` set to `false` in `about:config`.
 
 ## Using it
 

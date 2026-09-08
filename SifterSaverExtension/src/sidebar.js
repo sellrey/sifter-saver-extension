@@ -50,9 +50,17 @@
   function update(state, quiet) {
     last = state;
     if (!root) return;
-    const typing = ui.editing && panel.contains(document.activeElement) && document.activeElement.tagName === 'INPUT';
+    const active = document.activeElement;
+    const typing = active && panel.contains(active) && /^(INPUT|TEXTAREA)$/.test(active.tagName);
     if (quiet && typing) return;
-    render();
+    try {
+      render();
+    } catch (e) {
+      console.warn('[Sifter Saver] sidebar render failed', e);
+      lastHtml = '';
+      panel.innerHTML = `<header class="ssv-header"><div class="ssv-header__title"><span class="ssv-logo" aria-hidden="true"></span><h2>Sifter Saver</h2></div></header>
+        <div class="ssv-notice ssv-notice--error" role="alert"><span>Sifter Saver hit an error while drawing the sidebar: ${esc(e && e.message ? e.message : e)}. Reloading the page usually clears it; if not, export your presets from another tab and report the message.</span></div>`;
+    }
   }
 
   /* ---------- rendering ---------- */
@@ -165,7 +173,7 @@
         </div>
         ${visible.length ? `<ul class="ssv-presets">${items}</ul>` : `<p class="ssv-empty">${s.presets.length ? 'No presets for this game and job type. Tick "Show all" to see the rest.' : 'No presets yet. Fill in the sift preferences, then save them here.'}</p>`}
       </section>
-      <details class="ssv-section ssv-settings"${ui.settingsOpen ? ' open' : ''}>
+      <details class="ssv-section ssv-settings">
         <summary>Settings &amp; backup</summary>
         <label class="ssv-check"><input type="checkbox" data-setting="confirmEnabled" ${settings.confirmEnabled ? 'checked' : ''}/> Confirm settings before <strong>Start job</strong></label>
         <label class="ssv-field">
@@ -179,6 +187,16 @@
         <p class="ssv-hint">Presets are stored in this browser profile only. Export to share them with another machine or browser.</p>
       </details>
       <footer class="ssv-footer">Sifter Saver v${esc(version())}</footer>`);
+
+    // State that must survive innerHTML replacement is applied to the DOM, not encoded in the string.
+    const details = panel.querySelector('details.ssv-settings');
+    if (details) details.open = ui.settingsOpen;
+    const fileInput = panel.querySelector('input[data-file="import"]');
+    if (fileInput && !fileInput.__ssvBound) {
+      // Bound directly so the change still lands if a re-render detached the input while the picker was open.
+      fileInput.__ssvBound = true;
+      fileInput.addEventListener('change', onFileChange);
+    }
 
     if (ui.editing) {
       const input = panel.querySelector('form[data-form] input[name="name"]');
@@ -208,6 +226,14 @@
   /* ---------- events ---------- */
 
   function onClick(e) {
+    // The details "toggle" event fires asynchronously; a re-render in between can replace the
+    // element so the event never reaches us. Record the intent on the summary click itself
+    // (keyboard activation of a summary also fires click).
+    const summary = e.target.closest('details.ssv-settings > summary');
+    if (summary) {
+      ui.settingsOpen = !summary.parentElement.open;
+      return;
+    }
     const btn = e.target.closest('[data-action]');
     if (!btn || !root.contains(btn)) return;
     const action = btn.getAttribute('data-action');
@@ -269,11 +295,15 @@
   }
 
   function onToggle(e) {
-    if (e.target && e.target.matches && e.target.matches('details.ssv-settings')) {
-      ui.settingsOpen = e.target.open;
-      lastHtml = lastHtml.replace('<details class="ssv-section ssv-settings" open>', '<details class="ssv-section ssv-settings">');
-      if (ui.settingsOpen) lastHtml = lastHtml.replace('<details class="ssv-section ssv-settings">', '<details class="ssv-section ssv-settings" open>');
-    }
+    if (e.target && e.target.matches && e.target.matches('details.ssv-settings')) ui.settingsOpen = e.target.open;
+  }
+
+  function onFileChange(e) {
+    const el = e.target;
+    if (!el.files || !el.files[0]) return;
+    const file = el.files[0];
+    file.text().then((text) => onAction('import', { text })).catch((err) => onAction('notify', { kind: 'error', text: err.message }));
+    el.value = '';
   }
 
   function onInput(e) {
@@ -291,12 +321,6 @@
         if (!Number.isFinite(value) || value < 0) value = 0;
       }
       onAction('set-setting', { key, value });
-      return;
-    }
-    if (el.dataset && el.dataset.file === 'import' && el.files && el.files[0]) {
-      const file = el.files[0];
-      file.text().then((text) => onAction('import', { text })).catch((err) => onAction('notify', { kind: 'error', text: err.message }));
-      el.value = '';
     }
   }
 

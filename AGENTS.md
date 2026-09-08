@@ -25,6 +25,7 @@ This repo is a browser extension (Manifest V3, Chrome + Firefox, no build step) 
 - Foil-only sift job (sift-only with just the foil criterion): the site removes the whole Identification block (condition, language) and the foil finish block, and fixes foil to "foil cards".
 - The step-1 game select is teleported to `<body>`; the JobConfig selects are not.
 - Design-system widgets: `tcg-input-select` renders `div.tcg-input > .tcg-input-field > label span (label) … div.tcg-input-select > .tcg-input-select__trigger span (selected text) + ul.tcg-base-dropdown > li.tcg-base-dropdown__item[aria-label][role=option].is-selected`. The `ul` is `display:none` when closed but present, so `li.click()` selects without opening. Radios: `input.tcg-input-radio__input[name=foil-options|match-mode|batch-name-mode]`. Checkboxes: `input.tcg-input-checkbox__input`. Price: `input.currency-input__input` (handlers on `input` and `blur`).
+- Design-system stacking: `tcg-base-dialog` / `tcg-drawer` backdrops are z-index 100, full-screen loader 101, popovers 30, dropdowns 1–2. The sidebar sits at z-index 50 so site dialogs cover it; our own confirmation overlay is above everything.
 - The site keeps an in-memory "last form snapshot" per device (`?restore=1`) but nothing persistent or user-selectable, so this extension is not duplicating a feature.
 
 ## Conventions
@@ -33,7 +34,8 @@ This repo is a browser extension (Manifest V3, Chrome + Firefox, no build step) 
 - Prefix every injected class with `ssv-` and mark injected roots with `data-ssv` so the MutationObserver in `content.js` ignores our own DOM.
 - Selectors go in `SEL` in `src/dom.js` only. Pure logic (no DOM) goes in `src/presets.js` so it can be reasoned about and tested without a browser.
 - Anything that drives the form must `await` between steps (`dom.tick()` / `dom.waitFor()`); Vue re-renders asynchronously and the condition select loads after a fetch.
-- Do not add `host_permissions`, a background service worker, or network calls unless the feature genuinely needs them; the current manifest works identically in Chrome and Firefox because it has none.
+- Do not add `host_permissions`, a background service worker, or network calls unless the feature genuinely needs them; the current manifest works identically in Chrome and Firefox because it has none. `strict_min_version` is 128 because earlier Firefox MV3 builds do not grant content-script site access at install.
+- Every preset that enters `state.presets` (storage, import, form) goes through `presets.normalizeList`/`presetFromForm`; never trust raw storage or JSON shapes downstream. Writes go to storage first, then to state (`commitPresets`).
 - Don't store batch names/notes in presets; they are job-specific.
 
 ## When the site changes

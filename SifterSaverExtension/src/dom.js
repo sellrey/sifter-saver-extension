@@ -187,8 +187,9 @@
   }
 
   function readGameFromStep1() {
+    // The trigger shows either the chosen game or the placeholder; only accept a known game name.
     const t = text($(SEL.gameStepSelectTrigger));
-    return t && t !== 'Select' ? t : null;
+    return t && C.gameCodeFromName(t) ? t : null;
   }
 
   function readJobTypeFromStep1() {
