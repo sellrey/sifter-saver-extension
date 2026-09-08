@@ -8,7 +8,7 @@
 
   const DEFAULT_SETTINGS = {
     confirmEnabled: true,
-    warnPriceAbove: 10,
+    warnPriceAbove: 1,
     sidebarCollapsed: false,
     showAllPresets: false,
   };

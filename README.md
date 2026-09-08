@@ -40,7 +40,7 @@ The sidebar appears only on the Sifter job wizard. The context line at the top s
 - **Overwrite / Rename / Duplicate / Delete** manage the list.
 - After a preset is applied the card shows whether the form still matches it. Any later edit shows up as "form differs".
 - **Start job** opens the confirmation dialog. **Go back and edit** (the default) returns to the form; the start button changes to "Start despite warnings" when something was flagged. Escape or clicking outside also cancels.
-- **Settings & backup**: turn the confirmation off, change the price level that triggers a warning (default $10), and export or import presets as JSON to move them between browsers or machines.
+- **Settings & backup**: turn the confirmation off, change the price level that triggers a warning (default $1), and export or import presets as JSON to move them between browsers or machines.
 
 What a preset stores: job type, game, sift criteria (price threshold, rarities, colours/energy/ink types, foil preference, AND/OR), condition, foil finish, and for scan jobs the bins and batch-name mode. Batch names and notes are left alone because they are job-specific.
 
