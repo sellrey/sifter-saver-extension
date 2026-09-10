@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Gaming Co.
 /* Sifter Saver — site adapter for the Seller Portal "Roca Sifter" job wizard.
  *
  * Everything that touches the page DOM lives here. Selectors are derived from

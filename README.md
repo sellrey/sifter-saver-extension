@@ -1,6 +1,8 @@
+<p align="center"><img src="docs/thegamingco-logo.jpg" alt="The Gaming Co." width="360"></p>
+
 # Sifter Saver
 
-A Chrome / Firefox extension for the **TCGplayer Seller Portal → Scan & Identify → Roca Sifter** job wizard.
+A free Chrome / Firefox extension from **The Gaming Co.** for the **TCGplayer Seller Portal → Scan & Identify → Roca Sifter** job wizard.
 
 It fixes two gaps in the stock UI:
 
@@ -60,7 +62,8 @@ SifterSaverExtension/   the extension (load this folder)
 test/                   Playwright end-to-end test against a mock of the wizard
   mock/wizard.html      reproduction of the wizard's markup and behaviour
   run.mjs               the test script (npm test)
-tools/                  helpers for maintenance (icons, HAR bundle extraction)
+tools/                  helpers for maintenance (icons + footer mark from the logo, HAR bundle extraction)
+LICENSE                 MIT, © The Gaming Co. (a copy also sits in SifterSaverExtension/)
 ```
 
 ## Tests
@@ -85,6 +88,22 @@ The wizard is a Vue 3 single-spa micro-frontend (`sellerportal-quicklist-app.tcg
 - the primary footer button is `button.sellerportal-sifter-job__footer-primary` and reads "Start job" on the last step. The gate is a capture-phase click listener on `document` that stops the event before Vue's handler, then re-dispatches the click after confirmation.
 
 All selectors are in one place, `SEL` at the top of `src/dom.js`. If a site deploy renames classes, that is the file to update. `tools/extract_from_har.py` decodes the quicklist bundle from a HAR capture and prints the current class names and option tables so the catalog and selectors can be refreshed quickly.
+
+## License and attribution
+
+Sifter Saver is © 2026 The Gaming Co. and released under the [MIT License](LICENSE). You may use, copy, modify, and redistribute it, including commercially, as long as the copyright notice and license text stay with it. A copy of the license ships inside `SifterSaverExtension/` so packaged builds carry it too.
+
+If you fork or redistribute it, a line such as "Based on Sifter Saver by The Gaming Co. (https://github.com/sellrey/sifter-saver-extension)" in your README or store listing is appreciated, and the sidebar footer already credits The Gaming Co. in the extension itself.
+
+The Gaming Co. logo in this repository is a trademark of The Gaming Co. and is not covered by the MIT License. Forks should replace it with their own branding.
+
+## Disclaimer
+
+Sifter Saver is an independent project. It is not affiliated with, endorsed by, or supported by TCGplayer or eBay. "TCGplayer", "Scan & Identify", and "Roca Sifter" are their trademarks and are used only to describe what this extension works with. The extension is provided as is; check the confirmation dialog before every job, since a sift job runs on physical hardware.
+
+## Privacy
+
+The extension has no network access of its own and never contacts TCGplayer's APIs or any other server. Presets and settings are stored in the browser's local extension storage on your machine, and the only way they leave it is the Export button, which writes a JSON file you choose where to save.
 
 ## Limitations
 

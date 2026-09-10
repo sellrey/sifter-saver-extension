@@ -3,8 +3,12 @@
   "name": "Sifter Saver for TCGplayer Scan & Identify",
   "short_name": "Sifter Saver",
   "version": "0.1.0",
-  "description": "Save and re-apply Roca Sifter job preferences, and confirm them before Start job, in the TCGplayer Seller Portal.",
-  "permissions": ["storage"],
+  "description": "Unofficial helper for TCGplayer's Roca Sifter: save and re-apply job preferences and confirm them before Start job.",
+  "author": "The Gaming Co.",
+  "homepage_url": "https://github.com/sellrey/sifter-saver-extension",
+  "permissions": [
+    "storage"
+  ],
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -12,7 +16,9 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://sellerportal.tcgplayer.com/*"],
+      "matches": [
+        "https://sellerportal.tcgplayer.com/*"
+      ],
       "js": [
         "src/catalog.js",
         "src/storage.js",
@@ -22,7 +28,9 @@
         "src/sidebar.js",
         "src/content.js"
       ],
-      "css": ["styles/sifter-saver.css"],
+      "css": [
+        "styles/sifter-saver.css"
+      ],
       "run_at": "document_idle"
     }
   ],

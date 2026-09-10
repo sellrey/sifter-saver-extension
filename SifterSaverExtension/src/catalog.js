@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Gaming Co.
 /* Sifter Saver — static catalog of games and option labels.
  * Values mirror what the Seller Portal quicklist bundle renders, so presets
  * can be validated and summarised without touching the page. */
@@ -124,6 +126,15 @@
     const hidden = HIDDEN_CRITERIA[code] || [];
     return CRITERIA_ORDER.filter((c) => !hidden.includes(c));
   }
+
+  SS.about = {
+    name: 'Sifter Saver',
+    author: 'The Gaming Co.',
+    year: '2026',
+    license: 'MIT',
+    homepage: 'https://github.com/sellrey/sifter-saver-extension',
+    disclaimer: 'Not affiliated with, endorsed by, or supported by TCGplayer or eBay.',
+  };
 
   SS.catalog = {
     GAMES, JOB_TYPES, RARITY, COLOR, FOIL_FINISH, CONDITIONS, CRITERIA_ORDER,

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Gaming Co.
 /* Sifter Saver — pure functions over presets and form snapshots (no DOM). */
 (function () {
   'use strict';

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Gaming Co.
 /* Sifter Saver — thin promise wrapper over browser.storage.local that works in
  * Chrome (chrome.*) and Firefox (browser.*). */
 (function () {

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Gaming Co.
 /* End-to-end test: loads the unpacked extension into Chromium and drives the
  * mock wizard (test/mock/wizard.html) served at the real Seller Portal URL so
  * the content script matches. Run with `npm test` inside test/. */

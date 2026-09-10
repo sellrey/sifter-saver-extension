@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Gaming Co.
 /* Sifter Saver — content-script entry point.
  *
  * Responsibilities:

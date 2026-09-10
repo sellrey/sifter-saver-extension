@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Gaming Co.
 /* Sifter Saver — right-hand sidebar listing saved presets. */
 (function () {
   'use strict';
@@ -186,7 +188,13 @@
         </div>
         <p class="ssv-hint">Presets are stored in this browser profile only. Export to share them with another machine or browser.</p>
       </details>
-      <footer class="ssv-footer">Sifter Saver v${esc(version())}</footer>`);
+      <footer class="ssv-footer">
+        <a class="ssv-footer__brand" href="${esc(SS.about.homepage)}" target="_blank" rel="noopener noreferrer" title="Project page">
+          <span class="ssv-footer__mark" aria-hidden="true"></span>
+          <span>${esc(SS.about.name)} v${esc(version())} by ${esc(SS.about.author)}</span>
+        </a>
+        <span class="ssv-footer__legal">© ${esc(SS.about.year)} ${esc(SS.about.author)} · ${esc(SS.about.license)} License · ${esc(SS.about.disclaimer)}</span>
+      </footer>`);
 
     // State that must survive innerHTML replacement is applied to the DOM, not encoded in the string.
     const details = panel.querySelector('details.ssv-settings');

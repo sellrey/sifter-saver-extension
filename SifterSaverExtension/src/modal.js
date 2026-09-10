@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Gaming Co.
 /* Sifter Saver — minimal accessible dialog used for the Start-job gate and
  * for destructive confirmations in the sidebar. */
 (function () {

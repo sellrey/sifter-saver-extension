@@ -12,7 +12,7 @@ This repo is a browser extension (Manifest V3, Chrome + Firefox, no build step) 
 
 - `SifterSaverExtension/` — the loadable extension. Plain scripts, loaded in the order listed in `manifest.json`; each attaches to `globalThis.SifterSaver` (`SS.catalog`, `SS.storage`, `SS.presets`, `SS.dom`, `SS.modal`, `SS.sidebar`). `src/content.js` is the entry and must stay last.
 - `test/` — Playwright e2e (`cd test && npm install && npm test`). `test/mock/wizard.html` reproduces the real wizard's markup and behaviour; keep it faithful when you learn something new about the site.
-- `tools/make_icons.py` regenerates icons; `tools/extract_from_har.py` decodes the site's JS bundle from a HAR file and prints selectors/option tables.
+- `tools/make_icons.mjs` renders the extension icons and the sidebar footer mark from `docs/thegamingco-logo.jpg` (needs `npm install` in `test/` for Playwright); `tools/extract_from_har.py` decodes the site's JS bundle from a HAR file and prints selectors/option tables.
 - `sellerportal.tcgplayer.com-scan-identify.har` — a capture of the real page used to derive everything below. It is git-ignored (9 MB, and it contains seller account details, device serials and staff names); keep it locally. Don't load it into context wholesale, use the tool script.
 
 ## Facts about the site (verified from the bundle, Sept 2026)
@@ -37,6 +37,7 @@ This repo is a browser extension (Manifest V3, Chrome + Firefox, no build step) 
 - Do not add `host_permissions`, a background service worker, or network calls unless the feature genuinely needs them; the current manifest works identically in Chrome and Firefox because it has none. `strict_min_version` is 128 because earlier Firefox MV3 builds do not grant content-script site access at install.
 - Every preset that enters `state.presets` (storage, import, form) goes through `presets.normalizeList`/`presetFromForm`; never trust raw storage or JSON shapes downstream. Writes go to storage first, then to state (`commitPresets`).
 - Don't store batch names/notes in presets; they are job-specific.
+- Licensing and credit: MIT, © The Gaming Co. Keep the two-line SPDX header on every new source file, keep `LICENSE` in both the repo root and `SifterSaverExtension/`, and keep the footer credit and TCGplayer/eBay disclaimer (`SS.about` in `src/catalog.js`). The logo is a trademark, not MIT-licensed.
 
 ## When the site changes
 
